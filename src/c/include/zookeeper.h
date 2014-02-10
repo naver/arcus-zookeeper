@@ -1226,6 +1226,14 @@ ZOOAPI void zoo_set_debug_level(ZooLogLevel logLevel);
 ZOOAPI void zoo_set_log_stream(FILE* logStream);
 
 /**
+ * \brief sets the stream to be forwarded to syslogd for logging
+ *
+ * If passed a non-zero value for enable, will make the log to be forwarded to
+ * syslogd.
+ */
+ZOOAPI void zoo_forward_logs_to_syslog(const char *name, int enable);
+
+/**
  * \brief enable/disable quorum endpoint order randomization
  * 
  * Note: typically this method should NOT be used outside of testing.

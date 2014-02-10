@@ -31,6 +31,7 @@
 #define TIME_NOW_BUF_SIZE 1024
 #define FORMAT_LOG_BUF_SIZE 4096
 
+#include <syslog.h>
 #ifdef THREADED
 #ifndef WIN32
 #include <pthread.h>
@@ -96,6 +97,43 @@ void zoo_set_log_stream(FILE* stream){
     logStream=stream;
 }
 
+static int map_syslog_priority(ZooLogLevel logLevel)
+{
+    int priority;
+    switch (logLevel) {
+    case ZOO_LOG_LEVEL_ERROR:
+    case ZOO_LOG_LEVEL_WARN:
+        priority = LOG_WARNING;
+        break;
+    case ZOO_LOG_LEVEL_INFO:
+        priority = LOG_NOTICE;
+        break;
+    case ZOO_LOG_LEVEL_DEBUG:
+    default:
+        priority = LOG_DEBUG;
+    }
+
+    return priority;
+}
+
+static int enableSyslog = 0;
+
+/* In some environments, we want to send ZooKeeper log messages to syslog.
+ * The user can call this function during init to force the library to use
+ * syslog instead of file.
+ */
+void zoo_forward_logs_to_syslog(const char *name, int enable)
+{
+    if (enable && !enableSyslog) {
+        openlog(name, LOG_NDELAY | LOG_CONS | LOG_PID, LOG_DAEMON);
+        setlogmask(LOG_UPTO(map_syslog_priority(logLevel)));
+    } else if (!enable && enableSyslog) {
+        closelog();
+    }
+
+    enableSyslog = enable;
+}
+
 static const char* time_now(char* now_str){
     struct timeval tv;
     struct tm lt;
@@ -132,6 +170,13 @@ void log_message(ZooLogLevel curLevel,int line,const char* funcName,
     char timebuf [TIME_NOW_BUF_SIZE];
 #endif
     if(pid==0)pid=getpid();
+    if(enableSyslog && logLevel >= curLevel) {
+        static const char* sysDbgLevelStr[]={"INVALID","ERROR","WARN",
+                                             "INFO","DEBUG"};
+        syslog(map_syslog_priority(curLevel), "zookeeper[%s@%s@%d] %s",
+               sysDbgLevelStr[curLevel],funcName,line,message);
+        return;
+    }
 #ifndef THREADED
     fprintf(LOGSTREAM, "%s:%d:%s@%s@%d: %s\n", time_now(get_time_buffer()),pid,
             dbgLevelStr[curLevel],funcName,line,message);
