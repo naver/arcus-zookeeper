@@ -24,6 +24,12 @@
 #include <stdlib.h>
 #include <time.h>
 
+void zoo_lock_new_addrs(zhandle_t *zh)
+{
+}
+void zoo_unlock_new_addrs(zhandle_t *zh)
+{
+}
 void zoo_lock_auth(zhandle_t *zh)
 {
 }
