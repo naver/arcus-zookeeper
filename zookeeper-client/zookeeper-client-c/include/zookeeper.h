@@ -99,6 +99,7 @@ enum ZOO_ERRORS {
   ZOPERATIONTIMEOUT = -7, /*!< Operation timeout */
   ZBADARGUMENTS = -8, /*!< Invalid arguments */
   ZINVALIDSTATE = -9, /*!< Invliad zhandle state */
+  ZAPPPINGFAILED = -10, /*!< Application layer heartbeat failure */
   ZNEWCONFIGNOQUORUM = -13, /*!< No quorum of new config is connected and
                                  up-to-date with the leader of last commmitted
                                  config - try invoking reconfiguration after new
@@ -462,6 +463,27 @@ typedef void (*watcher_fn)(zhandle_t *zh, int type,
 typedef void (*log_callback_fn)(const char *message);
 
 /**
+ * \brief signature of a L7 ping function.
+ *
+ * There are two ways to receive watch notifications: legacy and watcher object.
+ * <p>
+ * The legacy style, an application wishing to receive events from ZooKeeper must 
+ * first implement a function with this signature and pass a pointer to the function 
+ * to \ref zookeeper_init. Next, the application sets a watch by calling one of 
+ * the getter API that accept the watch integer flag (for example, \ref zoo_aexists, 
+ * \ref zoo_get, etc).
+ * <p>
+ *
+ * \param zh zookeeper handle
+ * \param context application ping context
+ * \return 0 on successful ping. Non-zero on ping failure.
+ *
+ * ZOK - success
+ * ZAPPINGFAILED - application ping routine decides if it timed out or not.
+ */
+typedef int (*app_ping_fn)(zhandle_t *zh, void *context);
+
+/**
  * \brief create a handle to used communicate with zookeeper.
  *
  * This method creates a new handle and a zookeeper session that corresponds
@@ -648,6 +670,14 @@ ZOOAPI watcher_fn zoo_set_watcher(zhandle_t *zh,watcher_fn newFn);
  */
 ZOOAPI struct sockaddr* zookeeper_get_connected_host(zhandle_t *zh,
         struct sockaddr *addr, socklen_t *addr_len);
+
+/**
+ * \brief set an application layer (L7) ping function
+ * \return a result code
+ * ZOK - success
+ * ZBADARGUMENTS - invalid input parameters
+ */
+ZOOAPI int zoo_register_app_ping(zhandle_t *zh, app_ping_fn app_ping, void *context);
 
 #ifndef THREADED
 /**
