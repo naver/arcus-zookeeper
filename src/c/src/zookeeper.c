@@ -1628,7 +1628,9 @@ int zookeeper_interest(zhandle_t *zh, int *fd, int *interest,
             }
         }
         *fd = zh->fd;
-        *tv = get_timeval(zh->recv_timeout/3);
+        /* *tv = get_timeval(zh->recv_timeout/3); */
+        /* Use a short connect timeout/delay to try multiple servers quickly. */
+        *tv = get_timeval(1000);
         zh->last_recv = now;
         zh->last_send = now;
         zh->last_ping = now;
@@ -1636,8 +1638,18 @@ int zookeeper_interest(zhandle_t *zh, int *fd, int *interest,
     if (zh->fd != -1) {
         int idle_recv = calculate_interval(&zh->last_recv, &now);
         int idle_send = calculate_interval(&zh->last_send, &now);
-        int recv_to = zh->recv_timeout*2/3 - idle_recv;
+        int recv_to = zh->recv_timeout*2/3;
         int send_to = zh->recv_timeout/3;
+        /* Use a short connect timeout so we can try connecting to ZooKeeper
+         * servers quickly.
+         */
+        int conn_to = zh->recv_timeout/(3*zh->addrs_count);
+
+        if (zh->state == ZOO_CONNECTED_STATE)
+            recv_to = recv_to - idle_recv;
+        else
+            recv_to = conn_to - idle_recv;
+
         // have we exceeded the receive timeout threshold?
         if (recv_to <= 0) {
             // We gotta cut our losses and connect to someone else
@@ -1646,6 +1658,11 @@ int zookeeper_interest(zhandle_t *zh, int *fd, int *interest,
 #else
             errno = ETIMEDOUT;
 #endif
+            /* handle_socket_error_msg calls handle_error, which closes
+             * zh->fd and sets it -1.  Set fd=-1 here so the caller
+             * does not poll the now-closed socket.  See do_io.
+             */
+            *fd=-1;
             *interest=0;
             *tv = get_timeval(0);
             return api_epilog(zh,handle_socket_error_msg(zh,
@@ -1655,6 +1672,7 @@ int zookeeper_interest(zhandle_t *zh, int *fd, int *interest,
                     -recv_to));
 
         }
+
         // We only allow 1/3 of our timeout time to expire before sending
         // a PING
         if (zh->state==ZOO_CONNECTED_STATE) {
