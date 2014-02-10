@@ -43,6 +43,34 @@ ZOOAPI void log_message(log_callback_fn callback, ZooLogLevel curLevel,
 
 FILE* zoo_get_log_stream();
 
+/* FIXME
+ * because it is used by the arcus-c-client,
+ * it must be fix to ensure that support backward compatibility.
+ */
+#define ZOO_LOG_ERROR(x) if(logLevel>=ZOO_LOG_LEVEL_ERROR) \
+    log_message(ZOO_LOG_LEVEL_ERROR,__LINE__,__func__,format_log_message x)
+#define ZOO_LOG_WARN(x) if(logLevel>=ZOO_LOG_LEVEL_WARN) \
+    log_message(ZOO_LOG_LEVEL_WARN,__LINE__,__func__,format_log_message x)
+#define ZOO_LOG_INFO(x) if(logLevel>=ZOO_LOG_LEVEL_INFO) \
+    log_message(ZOO_LOG_LEVEL_INFO,__LINE__,__func__,format_log_message x)
+#define ZOO_LOG_DEBUG(x) if(logLevel==ZOO_LOG_LEVEL_DEBUG) \
+    log_message(ZOO_LOG_LEVEL_DEBUG,__LINE__,__func__,format_log_message x)
+
+/* LOG_ is common naming.  So, when compiling a client program, prefix these
+ * macros with ZOO_ to avoid conflicts.
+ */
+#ifndef ZOOKEEPER_C_CLIENT
+#define LOG_ERROR  ZOO_LOG_ERROR
+#define LOG_WARN   ZOO_LOG_WARN
+#define LOG_INFO   ZOO_LOG_INFO
+#define LOG_DEBUG  ZOO_LOG_DEBUG
+#endif
+
+ZOOAPI void log_message(ZooLogLevel curLevel, int line,const char* funcName,
+    const char* message);
+
+ZOOAPI const char* format_log_message(const char* format,...);
+
 #ifdef __cplusplus
 }
 #endif
