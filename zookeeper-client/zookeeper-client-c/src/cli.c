@@ -730,11 +730,20 @@ int main(int argc, char **argv) {
         fprintf(stderr,
                 "USAGE %s zookeeper_host_list [clientid_file|cmd:(ls|ls2|create|create2|od|...)]\n", 
                 argv[0]);
+#if ZOO_INHOUSE_PATCH_VERSION > 0
+        fprintf(stderr,
+                "Version: ZooKeeper cli (c client) version %d.%d.%d-p%d\n",
+                ZOO_MAJOR_VERSION,
+                ZOO_MINOR_VERSION,
+                ZOO_PATCH_VERSION,
+                ZOO_INHOUSE_PATCH_VERSION);
+#else
         fprintf(stderr,
                 "Version: ZooKeeper cli (c client) version %d.%d.%d\n", 
                 ZOO_MAJOR_VERSION,
                 ZOO_MINOR_VERSION,
                 ZOO_PATCH_VERSION);
+#endif
         return 2;
     }
     if (argc > 2) {
