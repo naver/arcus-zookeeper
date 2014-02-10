@@ -2098,9 +2098,18 @@ static struct timeval get_timeval(int interval)
  int send_ping(zhandle_t* zh)
  {
     int rc;
-    struct oarchive *oa = create_buffer_oarchive();
+    struct oarchive *oa;
     struct RequestHeader h = {PING_XID, ZOO_PING_OP};
 
+    // application (L7) ping first
+    if (zh->app_ping) {
+        rc = (*zh->app_ping)(zh, zh->ping_context);
+        if (rc) {
+            return ZAPPPINGFAILED;
+        }
+    }
+
+    oa = create_buffer_oarchive();
     rc = serialize_RequestHeader(oa, "header", &h);
     enter_critical(zh);
     get_system_time(&zh->last_ping);
@@ -5138,4 +5147,15 @@ int zoo_aremove_all_watches(zhandle_t *zh, const char *path,
 {
     return aremove_watches(
         zh, path, wtype, NULL, NULL, local, completion, data, 1);
+}
+
+int zoo_register_app_ping(zhandle_t *zh, app_ping_fn app_ping, void *context)
+{
+    zh->app_ping = app_ping;
+    zh->ping_context = context;
+
+    if (!app_ping) {
+        return ZBADARGUMENTS;
+    }
+    return ZOK;
 }
