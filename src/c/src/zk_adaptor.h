@@ -227,6 +227,10 @@ struct _zhandle {
     zk_hashtable* active_child_watchers;
     /** used for chroot path at the client side **/
     char *chroot;
+
+    /** application layer ping */
+    app_ping_fn app_ping;
+    void *ping_context;
 };
 
 
