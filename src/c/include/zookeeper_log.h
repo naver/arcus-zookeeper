@@ -52,7 +52,7 @@ ZOOAPI void log_message(ZooLogLevel curLevel, int line,const char* funcName,
 
 ZOOAPI const char* format_log_message(const char* format,...);
 
-FILE* getLogStream();
+FILE* getLogStream(void);
 
 #ifdef __cplusplus
 }
