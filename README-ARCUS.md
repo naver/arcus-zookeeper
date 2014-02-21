@@ -8,6 +8,12 @@ on the modified library.
 
 Use this branch: arcus-3.4.5
 
+Github project page:
+https://github.com/naver/arcus
+
+Build on Linux
+----
+
 In the top directory, run the following to generate necessary headers and
 scripts.  Then wrap the whole C library directory in a tarball and distribute
 that file.
