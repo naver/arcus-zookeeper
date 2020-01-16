@@ -297,8 +297,8 @@ static struct oarchive oa_default = { STRUCT_INITIALIZER (start_record , oa_star
 struct iarchive *create_buffer_iarchive(char *buffer, int len)
 {
     struct iarchive *ia = malloc(sizeof(*ia));
-    struct buff_struct *buff = malloc(sizeof(struct buff_struct));
     if (!ia) return 0;
+    struct buff_struct *buff = malloc(sizeof(struct buff_struct));
     if (!buff) {
         free(ia);
         return 0;
@@ -314,8 +314,8 @@ struct iarchive *create_buffer_iarchive(char *buffer, int len)
 struct oarchive *create_buffer_oarchive()
 {
     struct oarchive *oa = malloc(sizeof(*oa));
-    struct buff_struct *buff = malloc(sizeof(struct buff_struct));
     if (!oa) return 0;
+    struct buff_struct *buff = malloc(sizeof(struct buff_struct));
     if (!buff) {
         free(oa);
         return 0;
