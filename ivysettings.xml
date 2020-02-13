@@ -18,7 +18,7 @@
 -->
 
   <property name="repo.maven.org"
-    value="http://repo1.maven.org/maven2/" override="false"/>
+    value="https://repo1.maven.org/maven2/" override="false"/>
   <property name="repo.jboss.org"
     value="http://repository.jboss.org/nexus/content/groups/public/" override="false"/>
   <property name="repo.sun.org"
