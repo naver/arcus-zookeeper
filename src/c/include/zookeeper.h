@@ -93,6 +93,7 @@ enum ZOO_ERRORS {
   ZOPERATIONTIMEOUT = -7, /*!< Operation timeout */
   ZBADARGUMENTS = -8, /*!< Invalid arguments */
   ZINVALIDSTATE = -9, /*!< Invliad zhandle state */
+  ZAPPPINGFAILED = -10, /*!< Application layer heartbeat failure */
 
   /** API errors.
    * This is never thrown by the server, it shouldn't be used other than
@@ -419,6 +420,27 @@ typedef void (*watcher_fn)(zhandle_t *zh, int type,
         int state, const char *path,void *watcherCtx);
 
 /**
+ * \brief signature of a L7 ping function.
+ *
+ * There are two ways to receive watch notifications: legacy and watcher object.
+ * <p>
+ * The legacy style, an application wishing to receive events from ZooKeeper must 
+ * first implement a function with this signature and pass a pointer to the function 
+ * to \ref zookeeper_init. Next, the application sets a watch by calling one of 
+ * the getter API that accept the watch integer flag (for example, \ref zoo_aexists, 
+ * \ref zoo_get, etc).
+ * <p>
+ *
+ * \param zh zookeeper handle
+ * \param context application ping context
+ * \return 0 on successful ping. Non-zero on ping failure.
+ *
+ * ZOK - success
+ * ZAPPINGFAILED - application ping routine decides if it timed out or not.
+ */
+typedef int (*app_ping_fn)(zhandle_t *zh, void *context);
+
+/**
  * \brief create a handle to used communicate with zookeeper.
  * 
  * This method creates a new handle and a zookeeper session that corresponds
@@ -509,6 +531,14 @@ ZOOAPI watcher_fn zoo_set_watcher(zhandle_t *zh,watcher_fn newFn);
  */
 ZOOAPI struct sockaddr* zookeeper_get_connected_host(zhandle_t *zh,
         struct sockaddr *addr, socklen_t *addr_len);
+
+/**
+ * \brief set an application layer (L7) ping function
+ * \return a result code
+ * ZOK - success
+ * ZBADARGUMENTS - invalid input parameters
+ */
+ZOOAPI int zoo_register_app_ping(zhandle_t *zh, app_ping_fn app_ping, void *context);
 
 #ifndef THREADED
 /**
@@ -1196,6 +1226,14 @@ ZOOAPI void zoo_set_debug_level(ZooLogLevel logLevel);
 ZOOAPI void zoo_set_log_stream(FILE* logStream);
 
 /**
+ * \brief sets the stream to be forwarded to syslogd for logging
+ *
+ * If passed a non-zero value for enable, will make the log to be forwarded to
+ * syslogd.
+ */
+ZOOAPI void zoo_forward_logs_to_syslog(const char *name, int enable);
+
+/**
  * \brief enable/disable quorum endpoint order randomization
  * 
  * Note: typically this method should NOT be used outside of testing.
@@ -1575,6 +1613,35 @@ ZOOAPI int zoo_set_acl(zhandle_t *zh, const char *path, int version,
  * \ref zoo_acreate, \ref zoo_adelete, \ref zoo_aset).
  */ 
 ZOOAPI int zoo_multi(zhandle_t *zh, int count, const zoo_op_t *ops, zoo_op_result_t *results);
+
+/**
+ * \brief change the ensemble address on the fly.
+ *
+ * Use this function to change the ensemble list after the initialization and while
+ * the ZooKeeper client is running.
+ * \param host comma separated host:port pairs, each corresponding to a zk
+ *   server. e.g. "127.0.0.1:3000,127.0.0.1:3001,127.0.0.1:3002"
+ * \return the return code for the function call.
+ * ZOK operation completed successfully
+ * ZBADARGUMENTS invalid input parameters
+ * ZSYSTEMERROR a system error occured
+ */
+ZOOAPI int zookeeper_change_ensemble(zhandle_t *zh, const char *host);
+
+/**
+ * \brief get the ensemble address in string format.
+ *
+ * Upon success, dst contains a null-terminated string, showing
+ * the IP addresses of the server in the ensemble.
+ *
+ * \param dst the caller provided buffer.
+ * \param size the size of dst in bytes.
+ * \return the return code for the function call.
+ * ZOK operation completed successfully
+ * ZBADARGUMENTS invalid input parameters
+ * ZSYSTEMERROR a system error occured
+ */
+ZOOAPI int zookeeper_get_ensemble_string(zhandle_t *zh, char *dst, int size);
 
 #ifdef __cplusplus
 }

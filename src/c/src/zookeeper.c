@@ -1408,7 +1408,7 @@ static int serialize_prime_connect(struct connect_req *req, char* buffer){
     memcpy(buffer + offset, &req->protocolVersion, sizeof(req->protocolVersion));
     offset = offset +  sizeof(req->protocolVersion);
 
-    req->lastZxidSeen = htonll(req->lastZxidSeen);
+    req->lastZxidSeen = zoo_htonll(req->lastZxidSeen);
     memcpy(buffer + offset, &req->lastZxidSeen, sizeof(req->lastZxidSeen));
     offset = offset +  sizeof(req->lastZxidSeen);
 
@@ -1416,7 +1416,7 @@ static int serialize_prime_connect(struct connect_req *req, char* buffer){
     memcpy(buffer + offset, &req->timeOut, sizeof(req->timeOut));
     offset = offset +  sizeof(req->timeOut);
 
-    req->sessionId = htonll(req->sessionId);
+    req->sessionId = zoo_htonll(req->sessionId);
     memcpy(buffer + offset, &req->sessionId, sizeof(req->sessionId));
     offset = offset +  sizeof(req->sessionId);
 
@@ -1447,7 +1447,7 @@ static int serialize_prime_connect(struct connect_req *req, char* buffer){
      memcpy(&req->sessionId, buffer + offset, sizeof(req->sessionId));
      offset = offset +  sizeof(req->sessionId);
 
-     req->sessionId = htonll(req->sessionId);
+     req->sessionId = zoo_htonll(req->sessionId);
      memcpy(&req->passwd_len, buffer + offset, sizeof(req->passwd_len));
      offset = offset +  sizeof(req->passwd_len);
 
@@ -1520,9 +1520,18 @@ static struct timeval get_timeval(int interval)
  int send_ping(zhandle_t* zh)
  {
     int rc;
-    struct oarchive *oa = create_buffer_oarchive();
+    struct oarchive *oa;
     struct RequestHeader h = { STRUCT_INITIALIZER(xid ,PING_XID), STRUCT_INITIALIZER (type , ZOO_PING_OP) };
 
+    // application (L7) ping first
+    if (zh->app_ping) {
+        rc = (*zh->app_ping)(zh, zh->ping_context);
+        if (rc) {
+            return ZAPPPINGFAILED;
+        }
+    }
+
+    oa = create_buffer_oarchive();
     rc = serialize_RequestHeader(oa, "header", &h);
     enter_critical(zh);
     gettimeofday(&zh->last_ping, 0);
@@ -1545,6 +1554,8 @@ int zookeeper_interest(zhandle_t *zh, int *fd, int *interest,
      struct timeval *tv)
 {
 #endif
+    struct sockaddr_storage *old_addrs;
+    char *old_hostname;
     struct timeval now;
     if(zh==0 || fd==0 ||interest==0 || tv==0)
         return ZBADARGUMENTS;
@@ -1553,9 +1564,41 @@ int zookeeper_interest(zhandle_t *zh, int *fd, int *interest,
     gettimeofday(&now, 0);
     if(zh->next_deadline.tv_sec!=0 || zh->next_deadline.tv_usec!=0){
         int time_left = calculate_interval(&zh->next_deadline, &now);
-        if (time_left > 10)
+        int max_exceed = zh->recv_timeout / 10 > 200 ? 200 : 
+                         (zh->recv_timeout / 10);
+        if (time_left > max_exceed)
             LOG_WARN(("Exceeded deadline by %dms", time_left));
     }
+
+    /* Claim the new ensemble list if it exists.
+     * See zookeeper_change_ensemble().
+     */
+    old_addrs = NULL;
+    old_hostname = NULL;
+    zoo_lock_new_addrs(zh);
+    if (zh->new_addrs.valid) {
+        old_addrs = zh->addrs;
+        old_hostname = zh->hostname;
+
+        zh->addrs = zh->new_addrs.addrs;
+        zh->addrs_count = zh->new_addrs.addrs_count;
+        zh->hostname = zh->new_addrs.hostname;
+        zh->connect_index = 0; /* Reset this too in case addrs_count changes */
+
+        zh->new_addrs.addrs = NULL;
+        zh->new_addrs.addrs_count = 0;
+        zh->new_addrs.hostname = NULL;
+
+        zh->new_addrs.valid = 0;
+    }
+    zoo_unlock_new_addrs(zh);
+    if (old_hostname) {
+        ZOO_LOG_INFO(("Start using new ensemble server addresses."
+                " new=%s old=%s", zh->hostname, old_hostname));
+        free(old_hostname);
+        free(old_addrs);
+    }
+
     api_prolog(zh);
     *fd = zh->fd;
     *interest = 0;
@@ -1619,7 +1662,9 @@ int zookeeper_interest(zhandle_t *zh, int *fd, int *interest,
             }
         }
         *fd = zh->fd;
-        *tv = get_timeval(zh->recv_timeout/3);
+        /* *tv = get_timeval(zh->recv_timeout/3); */
+        /* Use a short connect timeout/delay to try multiple servers quickly. */
+        *tv = get_timeval(1000);
         zh->last_recv = now;
         zh->last_send = now;
         zh->last_ping = now;
@@ -1627,8 +1672,18 @@ int zookeeper_interest(zhandle_t *zh, int *fd, int *interest,
     if (zh->fd != -1) {
         int idle_recv = calculate_interval(&zh->last_recv, &now);
         int idle_send = calculate_interval(&zh->last_send, &now);
-        int recv_to = zh->recv_timeout*2/3 - idle_recv;
+        int recv_to = zh->recv_timeout*2/3;
         int send_to = zh->recv_timeout/3;
+        /* Use a short connect timeout so we can try connecting to ZooKeeper
+         * servers quickly.
+         */
+        int conn_to = zh->recv_timeout/(3*zh->addrs_count);
+
+        if (zh->state == ZOO_CONNECTED_STATE)
+            recv_to = recv_to - idle_recv;
+        else
+            recv_to = conn_to - idle_recv;
+
         // have we exceeded the receive timeout threshold?
         if (recv_to <= 0) {
             // We gotta cut our losses and connect to someone else
@@ -1637,6 +1692,11 @@ int zookeeper_interest(zhandle_t *zh, int *fd, int *interest,
 #else
             errno = ETIMEDOUT;
 #endif
+            /* handle_socket_error_msg calls handle_error, which closes
+             * zh->fd and sets it -1.  Set fd=-1 here so the caller
+             * does not poll the now-closed socket.  See do_io.
+             */
+            *fd=-1;
             *interest=0;
             *tv = get_timeval(0);
             return api_epilog(zh,handle_socket_error_msg(zh,
@@ -1646,6 +1706,7 @@ int zookeeper_interest(zhandle_t *zh, int *fd, int *interest,
                     -recv_to));
 
         }
+
         // We only allow 1/3 of our timeout time to expire before sending
         // a PING
         if (zh->state==ZOO_CONNECTED_STATE) {
@@ -3710,5 +3771,242 @@ int zoo_set_acl(zhandle_t *zh, const char *path, int version,
         rc = sc->rc;
     }
     free_sync_completion(sc);
+    return rc;
+}
+
+int zoo_register_app_ping(zhandle_t *zh, app_ping_fn app_ping, void *context)
+{
+    zh->app_ping = app_ping;
+    zh->ping_context = context;
+
+    if (!app_ping) {
+        return ZBADARGUMENTS;
+    }
+    return ZOK;
+}
+
+int zookeeper_get_ensemble_string(zhandle_t *zh, char *dst, int size)
+{
+    int i, port, rc;
+    void *inaddr;
+    struct sockaddr_storage *ep;
+    char *d;
+
+    if (dst == NULL || size <= 0)
+        return ZBADARGUMENTS;
+    d = dst;
+    *d = '\0';
+
+    zoo_lock_new_addrs(zh);
+
+    rc = ZOK;
+    for (i = 0; i < zh->addrs_count; i++) {
+        int rem, min;
+
+        ep = &zh->addrs[i];
+        /* See format_endpoint_info */
+#if defined(AF_INET6)
+        if(ep->ss_family==AF_INET6){
+            inaddr=&((struct sockaddr_in6*)ep)->sin6_addr;
+            port=((struct sockaddr_in6*)ep)->sin6_port;
+            min = INET6_ADDRSTRLEN;
+        } else {
+#endif
+            inaddr=&((struct sockaddr_in*)ep)->sin_addr;
+            port=((struct sockaddr_in*)ep)->sin_port;
+            min = INET_ADDRSTRLEN;
+#if defined(AF_INET6)
+        }
+#endif
+        d = dst + strlen(dst);
+        rem = size - strlen(dst) - 16;
+        /* Reserve 16 bytes , enough for port and null */
+        if (rem < min || NULL == inet_ntop(ep->ss_family, inaddr, d, rem)) {
+            /* Correct? */
+            errno = ENOMEM;
+            rc = ZSYSTEMERROR;
+            break;
+        }
+        else {
+            /* Inefficient, but it is okay.  We expect only a few addresses. */
+            d = dst + strlen(dst);
+            sprintf(d, ":%d ", ntohs(port));
+        }
+    }
+
+    zoo_unlock_new_addrs(zh);
+    return rc;
+}
+
+int zookeeper_change_ensemble(zhandle_t *zh, const char *hostname)
+{
+#if defined(__CYGWIN__)
+#error "Not implemented"
+#endif
+
+    /* Leave getaddrs() and its call sites intact...
+     *
+     * The following is an almost verbatim copy of getaddrs().
+     * Only slightly modified so we do not touch zhandle's existing addresses.
+     * Should get rid of this code duplication later on.
+     */
+
+    char *hosts = NULL, *hostname_copy = NULL, *old_hostname;
+    char *host;
+    char *strtok_last;
+    struct sockaddr_storage *addr;
+    int i;
+    int rc;
+    int alen = 0; /* the allocated length of the addrs array */
+
+    struct sockaddr_storage *addrs = NULL, *old_addrs;
+    int addrs_count = 0;
+
+    ZOO_LOG_INFO(("Setting new ensemble server addresses. hostname=%s",
+            hostname == NULL ? "null" : hostname));
+    if (hostname == NULL)
+        return ZBADARGUMENTS;
+
+    hostname_copy = strdup(hostname);
+    hosts = strdup(hostname);
+    if (!hosts || !hostname_copy) {
+        ZOO_LOG_ERROR(("out of memory"));
+        errno=ENOMEM;
+        return ZSYSTEMERROR;
+    }
+
+    host=strtok_r(hosts, ",", &strtok_last);
+    while(host) {
+        char *port_spec = strrchr(host, ':');
+        char *end_port_spec;
+        int port;
+        if (!port_spec) {
+            ZOO_LOG_ERROR(("no port in %s", host));
+            errno=EINVAL;
+            rc=ZBADARGUMENTS;
+            goto fail;
+        }
+        *port_spec = '\0';
+        port_spec++;
+        port = strtol(port_spec, &end_port_spec, 0);
+        if (!*port_spec || *end_port_spec || port == 0) {
+            ZOO_LOG_ERROR(("invalid port in %s", host));
+            errno=EINVAL;
+            rc=ZBADARGUMENTS;
+            goto fail;
+        }
+        struct addrinfo hints, *res, *res0;
+
+        memset(&hints, 0, sizeof(hints));
+#ifdef AI_ADDRCONFIG
+        hints.ai_flags = AI_ADDRCONFIG;
+#else
+        hints.ai_flags = 0;
+#endif
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_protocol = IPPROTO_TCP;
+
+        while(isspace(*host) && host != strtok_last)
+            host++;
+
+        if ((rc = getaddrinfo(host, port_spec, &hints, &res0)) != 0) {
+            //bug in getaddrinfo implementation when it returns
+            //EAI_BADFLAGS or EAI_ADDRFAMILY with AF_UNSPEC and
+            // ai_flags as AI_ADDRCONFIG
+            if ((hints.ai_flags == AI_ADDRCONFIG) &&
+                ((rc ==EAI_BADFLAGS) || (rc == EAI_ADDRFAMILY))) {
+                //reset ai_flags to null
+                hints.ai_flags = 0;
+                //retry getaddrinfo
+                rc = getaddrinfo(host, port_spec, &hints, &res0);
+            }
+            if (rc != 0) {
+                errno = getaddrinfo_errno(rc);
+                ZOO_LOG_ERROR(("getaddrinfo: %s\n", strerror(errno)));
+                rc=ZSYSTEMERROR;
+                goto fail;
+            }
+        }
+
+        for (res = res0; res; res = res->ai_next) {
+            // Expand address list if needed
+            if (addrs_count == alen) {
+                void *tmpaddr;
+                alen += 16;
+                tmpaddr = realloc(addrs, sizeof(*addrs)*alen);
+                if (tmpaddr == 0) {
+                    ZOO_LOG_ERROR(("out of memory"));
+                    errno=ENOMEM;
+                    rc=ZSYSTEMERROR;
+                    // fail: does not free this, so free it here
+                    freeaddrinfo(res0);
+                    goto fail;
+                }
+                addrs=tmpaddr;
+            }
+
+            // Copy addrinfo into address list
+            addr = &addrs[addrs_count];
+            switch (res->ai_family) {
+            case AF_INET:
+#if defined(AF_INET6)
+            case AF_INET6:
+#endif
+                memcpy(addr, res->ai_addr, res->ai_addrlen);
+                ++addrs_count;
+                break;
+            default:
+                ZOO_LOG_WARN(("skipping unknown address family %x for %s",
+                res->ai_family, hostname));
+                break;
+            }
+        }
+
+        freeaddrinfo(res0);
+
+        host = strtok_r(0, ",", &strtok_last);
+    }
+    free(hosts);
+
+    if(!disable_conn_permute){
+        for(i = 0; i < addrs_count; i++) {
+            struct sockaddr_storage *s1 = addrs + random()%addrs_count;
+            struct sockaddr_storage *s2 = addrs + random()%addrs_count;
+            if (s1 != s2) {
+                struct sockaddr_storage t = *s1;
+                *s1 = *s2;
+                *s2 = t;
+            }
+        }
+    }
+
+    /* Set the new addresses.  Free the old, unclaimed one if it exists. */
+    old_addrs = NULL;
+    old_hostname = NULL;
+    zoo_lock_new_addrs(zh);
+    if (zh->new_addrs.valid) {
+        old_addrs = zh->new_addrs.addrs;
+        old_hostname = zh->new_addrs.hostname;
+    }
+    zh->new_addrs.addrs = addrs;
+    zh->new_addrs.hostname = hostname_copy;
+    zh->new_addrs.addrs_count = addrs_count;
+    zh->new_addrs.valid = 1;
+    zoo_unlock_new_addrs(zh);
+
+    if (old_addrs)
+        free(old_addrs);
+    if (old_hostname)
+        free(old_hostname);
+
+    return ZOK;
+fail:
+    if (addrs)
+        free(addrs);
+    if (hosts)
+        free(hosts);
+    if (hostname_copy)
+        free(hostname_copy);
     return rc;
 }

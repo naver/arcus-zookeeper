@@ -44,6 +44,14 @@
 #include <sys/time.h>
 #endif
 
+void zoo_lock_new_addrs(zhandle_t *zh)
+{
+    pthread_mutex_lock(&zh->new_addrs.lock);
+}
+void zoo_unlock_new_addrs(zhandle_t *zh)
+{
+    pthread_mutex_unlock(&zh->new_addrs.lock);
+}
 void zoo_lock_auth(zhandle_t *zh)
 {
     pthread_mutex_lock(&zh->auth_h.lock);
@@ -251,6 +259,7 @@ int adaptor_init(zhandle_t *zh)
     set_nonblock(adaptor_threads->self_pipe[0]);
 
     pthread_mutex_init(&zh->auth_h.lock,0);
+    pthread_mutex_init(&zh->new_addrs.lock,0);
 
     zh->adaptor_priv = adaptor_threads;
     pthread_mutex_init(&zh->to_process.lock,0);
@@ -313,6 +322,7 @@ void adaptor_destroy(zhandle_t *zh)
     pthread_mutex_destroy(&adaptor->zh_lock);
 
     pthread_mutex_destroy(&zh->auth_h.lock);
+    pthread_mutex_destroy(&zh->new_addrs.lock);
 
     close(adaptor->self_pipe[0]);
     close(adaptor->self_pipe[1]);
