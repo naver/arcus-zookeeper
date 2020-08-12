@@ -268,6 +268,23 @@ struct _zhandle {
     char allow_read_only;
     /** Indicates if we connected to a majority server before */
     char seen_rw_server_before;
+
+    /** application layer ping */
+    app_ping_fn app_ping;
+    void *ping_context;
+
+    /* Change the ensemble list on the fly.  IO handler checks this field.
+     * See zookeeper_interest() and zookeeper_change_ensemble().
+     */
+    struct {
+        char *hostname;
+        struct sockaddr_storage *addrs;
+        int addrs_count;
+        int valid;
+#ifdef THREADED
+        pthread_mutex_t lock;
+#endif
+    } new_addrs;
 };
 
 
@@ -288,6 +305,8 @@ char* sub_string(zhandle_t *zh, const char* server_path);
 void free_duplicate_path(const char* free_path, const char* path);
 int zoo_lock_auth(zhandle_t *zh);
 int zoo_unlock_auth(zhandle_t *zh);
+void zoo_lock_new_addrs(zhandle_t *zh);
+void zoo_unlock_new_addrs(zhandle_t *zh);
 
 // ensemble reconfigure access guards
 int lock_reconfig(struct _zhandle *zh);
