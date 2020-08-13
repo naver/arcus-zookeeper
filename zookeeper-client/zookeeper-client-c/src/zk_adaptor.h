@@ -305,8 +305,8 @@ char* sub_string(zhandle_t *zh, const char* server_path);
 void free_duplicate_path(const char* free_path, const char* path);
 int zoo_lock_auth(zhandle_t *zh);
 int zoo_unlock_auth(zhandle_t *zh);
-void zoo_lock_new_addrs(zhandle_t *zh);
-void zoo_unlock_new_addrs(zhandle_t *zh);
+int zoo_lock_new_addrs(zhandle_t *zh);
+int zoo_unlock_new_addrs(zhandle_t *zh);
 
 // ensemble reconfigure access guards
 int lock_reconfig(struct _zhandle *zh);
