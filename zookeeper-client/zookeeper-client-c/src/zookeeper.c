@@ -2270,9 +2270,6 @@ int zookeeper_interest(zhandle_t *zh, socket_t *fd, int *interest,
     int rc = 0;
     struct timeval now;
 
-    struct sockaddr_storage *old_addrs;
-    char *old_hostname;
-
 #ifdef SOCK_CLOEXEC_ENABLED
     sock_flags = SOCK_STREAM | SOCK_CLOEXEC;
 #else
@@ -2290,35 +2287,6 @@ int zookeeper_interest(zhandle_t *zh, socket_t *fd, int *interest,
                          (zh->recv_timeout / 10);
         if (time_left > max_exceed)
             LOG_WARN(LOGCALLBACK(zh), "Exceeded deadline by %dms", time_left);
-    }
-
-    /* Claim the new ensemble list if it exists.
-     * See zookeeper_change_ensemble().
-     */
-    old_addrs = NULL;
-    old_hostname = NULL;
-    zoo_lock_new_addrs(zh);
-    if (zh->new_addrs.valid) {
-        old_addrs = zh->addrs;
-        old_hostname = zh->hostname;
-
-        zh->addrs = zh->new_addrs.addrs;
-        zh->addrs_count = zh->new_addrs.addrs_count;
-        zh->hostname = zh->new_addrs.hostname;
-        zh->connect_index = 0; /* Reset this too in case addrs_count changes */
-
-        zh->new_addrs.addrs = NULL;
-        zh->new_addrs.addrs_count = 0;
-        zh->new_addrs.hostname = NULL;
-
-        zh->new_addrs.valid = 0;
-    }
-    zoo_unlock_new_addrs(zh);
-    if (old_hostname) {
-        ZOO_LOG_INFO(("Start using new ensemble server addresses."
-                " new=%s old=%s", zh->hostname, old_hostname));
-        free(old_hostname);
-        free(old_addrs);
     }
 
     api_prolog(zh);
@@ -2415,7 +2383,7 @@ int zookeeper_interest(zhandle_t *zh, socket_t *fd, int *interest,
         /* Use a short connect timeout so we can try connecting to ZooKeeper
          * servers quickly.
          */
-        int conn_to = zh->recv_timeout/(3*zh->addrs_count);
+        int conn_to = zh->recv_timeout/(3*zh->addrs.count);
 
         if (zh->state == ZOO_CONNECTED_STATE)
             recv_to = recv_to - idle_recv;
@@ -5208,7 +5176,7 @@ int zoo_register_app_ping(zhandle_t *zh, app_ping_fn app_ping, void *context)
 
 int zookeeper_get_ensemble_string(zhandle_t *zh, char *dst, int size)
 {
-    int i, port, rc;
+    int i, port, rc = ZOK;
     void *inaddr;
     struct sockaddr_storage *ep;
     char *d;
@@ -5218,13 +5186,12 @@ int zookeeper_get_ensemble_string(zhandle_t *zh, char *dst, int size)
     d = dst;
     *d = '\0';
 
-    zoo_lock_new_addrs(zh);
-
-    rc = ZOK;
-    for (i = 0; i < zh->addrs_count; i++) {
+    // NOTE: guard access to {hostname, addr_cur, addrs, addrs_old, addrs_new}
+    lock_reconfig(zh);
+    for (i = 0; i < zh->addrs.count; i++) {
         int rem, min;
 
-        ep = &zh->addrs[i];
+        ep = &zh->addrs.data[i];
         /* See format_endpoint_info */
 #if defined(AF_INET6)
         if(ep->ss_family==AF_INET6){
@@ -5254,8 +5221,7 @@ int zookeeper_get_ensemble_string(zhandle_t *zh, char *dst, int size)
             sprintf(d, ":%d ", ntohs(port));
         }
     }
-
-    zoo_unlock_new_addrs(zh);
+    unlock_reconfig(zh);
     return rc;
 }
 
@@ -5265,169 +5231,40 @@ int zookeeper_change_ensemble(zhandle_t *zh, const char *hostname)
 #error "Not implemented"
 #endif
 
-    /* Leave getaddrs() and its call sites intact...
-     *
-     * The following is an almost verbatim copy of getaddrs().
-     * Only slightly modified so we do not touch zhandle's existing addresses.
-     * Should get rid of this code duplication later on.
+    /* Change ensemble using the zoo_set_servers() API.
+     * Save hostname to prepare for API failure.
      */
-
-    char *hosts = NULL, *hostname_copy = NULL, *old_hostname;
-    char *host;
-    char *strtok_last;
-    struct sockaddr_storage *addr;
-    int i;
-    int rc;
-    int alen = 0; /* the allocated length of the addrs array */
-
-    struct sockaddr_storage *addrs = NULL, *old_addrs;
-    int addrs_count = 0;
-
+    int rc = ZOK;
+    char *old_hostname = NULL;
     ZOO_LOG_INFO(("Setting new ensemble server addresses. hostname=%s",
             hostname == NULL ? "null" : hostname));
     if (hostname == NULL)
         return ZBADARGUMENTS;
 
-    hostname_copy = strdup(hostname);
-    hosts = strdup(hostname);
-    if (!hosts || !hostname_copy) {
-        ZOO_LOG_ERROR(("out of memory"));
-        errno=ENOMEM;
-        return ZSYSTEMERROR;
-    }
-
-    host=strtok_r(hosts, ",", &strtok_last);
-    while(host) {
-        char *port_spec = strrchr(host, ':');
-        char *end_port_spec;
-        int port;
-        if (!port_spec) {
-            ZOO_LOG_ERROR(("no port in %s", host));
-            errno=EINVAL;
-            rc=ZBADARGUMENTS;
-            goto fail;
-        }
-        *port_spec = '\0';
-        port_spec++;
-        port = strtol(port_spec, &end_port_spec, 0);
-        if (!*port_spec || *end_port_spec || port == 0) {
-            ZOO_LOG_ERROR(("invalid port in %s", host));
-            errno=EINVAL;
-            rc=ZBADARGUMENTS;
-            goto fail;
-        }
-        struct addrinfo hints, *res, *res0;
-
-        memset(&hints, 0, sizeof(hints));
-#ifdef AI_ADDRCONFIG
-        hints.ai_flags = AI_ADDRCONFIG;
-#else
-        hints.ai_flags = 0;
-#endif
-        hints.ai_family = AF_UNSPEC;
-        hints.ai_socktype = SOCK_STREAM;
-        hints.ai_protocol = IPPROTO_TCP;
-
-        while(isspace(*host) && host != strtok_last)
-            host++;
-
-        if ((rc = getaddrinfo(host, port_spec, &hints, &res0)) != 0) {
-            //bug in getaddrinfo implementation when it returns
-            //EAI_BADFLAGS or EAI_ADDRFAMILY with AF_UNSPEC and
-            // ai_flags as AI_ADDRCONFIG
-            if ((hints.ai_flags == AI_ADDRCONFIG) &&
-                ((rc ==EAI_BADFLAGS) || (rc == EAI_ADDRFAMILY))) {
-                //reset ai_flags to null
-                hints.ai_flags = 0;
-                //retry getaddrinfo
-                rc = getaddrinfo(host, port_spec, &hints, &res0);
-            }
-            if (rc != 0) {
-                errno = getaddrinfo_errno(rc);
-                ZOO_LOG_ERROR(("getaddrinfo: %s\n", strerror(errno)));
-                rc=ZSYSTEMERROR;
-                goto fail;
-            }
-        }
-
-        for (res = res0; res; res = res->ai_next) {
-            // Expand address list if needed
-            if (addrs_count == alen) {
-                void *tmpaddr;
-                alen += 16;
-                tmpaddr = realloc(addrs, sizeof(*addrs)*alen);
-                if (tmpaddr == 0) {
-                    ZOO_LOG_ERROR(("out of memory"));
-                    errno=ENOMEM;
-                    rc=ZSYSTEMERROR;
-                    // fail: does not free this, so free it here
-                    freeaddrinfo(res0);
-                    goto fail;
-                }
-                addrs=tmpaddr;
-            }
-
-            // Copy addrinfo into address list
-            addr = &addrs[addrs_count];
-            switch (res->ai_family) {
-            case AF_INET:
-#if defined(AF_INET6)
-            case AF_INET6:
-#endif
-                memcpy(addr, res->ai_addr, res->ai_addrlen);
-                ++addrs_count;
-                break;
-            default:
-                ZOO_LOG_WARN(("skipping unknown address family %x for %s",
-                res->ai_family, hostname));
-                break;
-            }
-        }
-
-        freeaddrinfo(res0);
-
-        host = strtok_r(0, ",", &strtok_last);
-    }
-    free(hosts);
-
-    if(!disable_conn_permute){
-        for(i = 0; i < addrs_count; i++) {
-            struct sockaddr_storage *s1 = addrs + random()%addrs_count;
-            struct sockaddr_storage *s2 = addrs + random()%addrs_count;
-            if (s1 != s2) {
-                struct sockaddr_storage t = *s1;
-                *s1 = *s2;
-                *s2 = t;
-            }
+    // NOTE: guard access to {zk->hostname}
+    lock_reconfig(zh);
+    if (zh->hostname != NULL) {
+        old_hostname = strdup(zh->hostname);
+        if (old_hostname == NULL) {
+            ZOO_LOG_ERROR(("out of memory"));
+            errno=ENOMEM;
+            rc=ZSYSTEMERROR;
         }
     }
+    unlock_reconfig(zh);
 
-    /* Set the new addresses.  Free the old, unclaimed one if it exists. */
-    old_addrs = NULL;
-    old_hostname = NULL;
-    zoo_lock_new_addrs(zh);
-    if (zh->new_addrs.valid) {
-        old_addrs = zh->new_addrs.addrs;
-        old_hostname = zh->new_addrs.hostname;
+    if (rc == ZOK) {
+        rc = zoo_set_servers(zh, hostname);
+        if (rc != ZOK) {
+            lock_reconfig(zh);
+            char *temp = zh->hostname;
+            zh->hostname = old_hostname;
+            old_hostname = temp;
+            unlock_reconfig(zh);
+        }
+        if (old_hostname != NULL) {
+            free(old_hostname);
+        }
     }
-    zh->new_addrs.addrs = addrs;
-    zh->new_addrs.hostname = hostname_copy;
-    zh->new_addrs.addrs_count = addrs_count;
-    zh->new_addrs.valid = 1;
-    zoo_unlock_new_addrs(zh);
-
-    if (old_addrs)
-        free(old_addrs);
-    if (old_hostname)
-        free(old_hostname);
-
-    return ZOK;
-fail:
-    if (addrs)
-        free(addrs);
-    if (hosts)
-        free(hosts);
-    if (hostname_copy)
-        free(hostname_copy);
     return rc;
 }
