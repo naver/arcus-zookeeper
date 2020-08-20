@@ -139,6 +139,9 @@ fi
 
 #echo "CLASSPATH=$CLASSPATH"
 
+# skipACL for use dynamic reconfiguration
+#export SERVER_JVMFLAGS="$SERVER_JVMFLAGS -Dzookeeper.skipACL=yes"
+
 # default heap for zookeeper server
 ZK_SERVER_HEAP="${ZK_SERVER_HEAP:-1000}"
 export SERVER_JVMFLAGS="-Xmx${ZK_SERVER_HEAP}m $SERVER_JVMFLAGS"
