@@ -268,6 +268,10 @@ struct _zhandle {
     char allow_read_only;
     /** Indicates if we connected to a majority server before */
     char seen_rw_server_before;
+
+    /** application layer ping */
+    app_ping_fn app_ping;
+    void *ping_context;
 };
 
 

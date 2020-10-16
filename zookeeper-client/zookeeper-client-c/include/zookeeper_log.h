@@ -43,6 +43,21 @@ ZOOAPI void log_message(log_callback_fn callback, ZooLogLevel curLevel,
 
 FILE* zoo_get_log_stream();
 
+/* ZOO_LOG macros are used in arcus-c-client */
+#define ZOO_LOG_ERROR(x) if(logLevel>=ZOO_LOG_LEVEL_ERROR) \
+    zoo_log_message(ZOO_LOG_LEVEL_ERROR, __LINE__, __func__, format_log_message x)
+#define ZOO_LOG_WARN(x) if(logLevel>=ZOO_LOG_LEVEL_WARN) \
+    zoo_log_message(ZOO_LOG_LEVEL_WARN, __LINE__, __func__, format_log_message x)
+#define ZOO_LOG_INFO(x) if(logLevel>=ZOO_LOG_LEVEL_INFO) \
+    zoo_log_message(ZOO_LOG_LEVEL_INFO, __LINE__, __func__, format_log_message x)
+#define ZOO_LOG_DEBUG(x) if(logLevel==ZOO_LOG_LEVEL_DEBUG) \
+    zoo_log_message(ZOO_LOG_LEVEL_DEBUG, __LINE__, __func__, format_log_message x)
+
+ZOOAPI void zoo_log_message(ZooLogLevel curLevel, int line, const char* funcName,
+    const char* message);
+
+ZOOAPI const char* format_log_message(const char* format,...);
+
 #ifdef __cplusplus
 }
 #endif
