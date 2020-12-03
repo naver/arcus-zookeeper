@@ -5260,8 +5260,9 @@ int zookeeper_change_ensemble(zhandle_t *zh, const char *hostname)
     if (rc == ZOK) {
         rc = zoo_set_servers(zh, hostname);
         if (rc != ZOK) {
+            char *temp;
             lock_reconfig(zh);
-            char *temp = zh->hostname;
+            temp = zh->hostname;
             zh->hostname = old_hostname;
             old_hostname = temp;
             unlock_reconfig(zh);
