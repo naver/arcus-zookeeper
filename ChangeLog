@@ -1,0 +1,11 @@
+2020-12-21 [version 3.4.6-p1]
+	* C library: add L7 (application layer) ping support
+	* C library: prefix LOG macros to avoid name conflicts
+	* C library: use a short connect timeout
+	* C library: add zoo_forward_logs_to_syslog
+	* C library: add functions to set, get ensemble list after init
+	* C library: strict prototyping
+	* Apply ZOOKEEPER-642 patch to remove "exceeded deadline by N ms" floods logs
+	* Apply ZOOKEEPER-2049 patch. "Yosemite build failure - htonll conflict"
+	* Fix build.xml. Apply ZOOKEEPER-2646 patch to support for JDK >= 1.6
+	* Changed maven central repository url.
