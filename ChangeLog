@@ -1,3 +1,6 @@
+2021-02-02 [version 3.4.6-p2]
+	* Apply ZOOKEEPER-1897 patch that ZK Shell/Cli not processing commands
+
 2020-12-21 [version 3.4.6-p1]
 	* C library: add L7 (application layer) ping support
 	* C library: prefix LOG macros to avoid name conflicts
