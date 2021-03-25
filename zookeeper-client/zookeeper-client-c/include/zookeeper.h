@@ -42,6 +42,7 @@
 
 #define ARCUS_SHORT_CONNECT_TIMEOUT
 #define ARCUS_ZK_SYSLOG
+#define ARCUS_ZK_API
 
 /**
  * \file zookeeper.h
@@ -2298,6 +2299,37 @@ ZOOAPI int zoo_multi(zhandle_t *zh, int count, const zoo_op_t *ops, zoo_op_resul
  */
 ZOOAPI int zoo_remove_watches(zhandle_t *zh, const char *path,
         ZooWatcherType wtype, watcher_fn watcher, void *watcherCtx, int local);
+
+#ifdef ARCUS_ZK_API
+/**
+ * \brief change the ensemble address on the fly.
+ *
+ * Use this function to change the ensemble list after the initialization and while
+ * the ZooKeeper client is running.
+ * \param host comma separated host:port pairs, each corresponding to a zk
+ *   server. e.g. "127.0.0.1:3000,127.0.0.1:3001,127.0.0.1:3002"
+ * \return the return code for the function call.
+ * ZOK operation completed successfully
+ * ZBADARGUMENTS invalid input parameters
+ * ZSYSTEMERROR a system error occured
+ */
+ZOOAPI int zookeeper_change_ensemble(zhandle_t *zh, const char *host);
+
+/**
+ * \brief get the ensemble address in string format.
+ *
+ * Upon success, dst contains a null-terminated string, showing
+ * the IP addresses of the server in the ensemble.
+ *
+ * \param dst the caller provided buffer.
+ * \param size the size of dst in bytes.
+ * \return the return code for the function call.
+ * ZOK operation completed successfully
+ * ZBADARGUMENTS invalid input parameters
+ * ZSYSTEMERROR a system error occured
+ */
+ZOOAPI int zookeeper_get_ensemble_string(zhandle_t *zh, char *dst, int size);
+#endif
 #endif
 #ifdef __cplusplus
 }

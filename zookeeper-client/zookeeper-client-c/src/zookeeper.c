@@ -5174,3 +5174,100 @@ int zoo_aremove_all_watches(zhandle_t *zh, const char *path,
     return aremove_watches(
         zh, path, wtype, NULL, NULL, local, completion, data, 1);
 }
+#ifdef ARCUS_ZK_API
+ int zookeeper_get_ensemble_string(zhandle_t *zh, char *dst, int size)
+ {
+     int i, port, rc = ZOK;
+     void *inaddr;
+     struct sockaddr_storage *ep;
+     char *d;
+
+     if (dst == NULL || size <= 0)
+         return ZBADARGUMENTS;
+     d = dst;
+     *d = '\0';
+
+     // NOTE: guard access to {hostname, addr_cur, addrs, addrs_old, addrs_new}
+     lock_reconfig(zh);
+     for (i = 0; i < zh->addrs.count; i++) {
+         int rem, min;
+
+         ep = &zh->addrs.data[i];
+         /* See format_endpoint_info */
+ #if defined(AF_INET6)
+         if(ep->ss_family==AF_INET6){
+             inaddr=&((struct sockaddr_in6*)ep)->sin6_addr;
+             port=((struct sockaddr_in6*)ep)->sin6_port;
+             min = INET6_ADDRSTRLEN;
+         } else {
+ #endif
+             inaddr=&((struct sockaddr_in*)ep)->sin_addr;
+             port=((struct sockaddr_in*)ep)->sin_port;
+             min = INET_ADDRSTRLEN;
+ #if defined(AF_INET6)
+         }
+ #endif
+         d = dst + strlen(dst);
+         rem = size - strlen(dst) - 16;
+         /* Reserve 16 bytes , enough for port and null */
+         if (rem < min || NULL == inet_ntop(ep->ss_family, inaddr, d, rem)) {
+             /* Correct? */
+             errno = ENOMEM;
+             rc = ZSYSTEMERROR;
+             break;
+         }
+         else {
+             /* Inefficient, but it is okay.  We expect only a few addresses. */
+             d = dst + strlen(dst);
+             sprintf(d, ":%d ", ntohs(port));
+         }
+     }
+     unlock_reconfig(zh);
+     return rc;
+ }
+
+ int zookeeper_change_ensemble(zhandle_t *zh, const char *hostname)
+ {
+ #if defined(__CYGWIN__)
+ #error "Not implemented"
+ #endif
+
+     /* Change ensemble using the zoo_set_servers() API.
+      * Save hostname to prepare for API failure.
+      */
+     int rc = ZOK;
+     char *old_hostname = NULL;
+     ZOO_LOG_INFO(("Setting new ensemble server addresses. hostname=%s",
+             hostname == NULL ? "null" : hostname));
+     if (hostname == NULL)
+         return ZBADARGUMENTS;
+
+     // NOTE: guard access to {zk->hostname}
+     lock_reconfig(zh);
+     if (zh->hostname != NULL) {
+         old_hostname = strdup(zh->hostname);
+         if (old_hostname == NULL) {
+             ZOO_LOG_ERROR(("out of memory"));
+             errno=ENOMEM;
+             rc=ZSYSTEMERROR;
+         }
+     }
+     unlock_reconfig(zh);
+
+     if (rc == ZOK) {
+         rc = zoo_set_servers(zh, hostname);
+         if (rc != ZOK) {
+             char *temp;
+             lock_reconfig(zh);
+             temp = zh->hostname;
+             zh->hostname = old_hostname;
+             old_hostname = temp;
+             unlock_reconfig(zh);
+         }
+         if (old_hostname != NULL) {
+             free(old_hostname);
+         }
+     }
+     return rc;
+ }
+#endif
