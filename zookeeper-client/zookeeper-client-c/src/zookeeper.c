@@ -2361,7 +2361,12 @@ int zookeeper_interest(zhandle_t *zh, socket_t *fd, int *interest,
                          "Initiated connection to server [%s]",
                          format_endpoint_info(&zh->addr_cur));
             }
+#ifdef ARCUS_SHORT_CONNECT_TIMEOUT
+            /* Use a short connect timeout/delay to try multiple servers quickly. */
+            *tv = get_timeval(1000);
+#else
             *tv = get_timeval(zh->recv_timeout/3);
+#endif
         }
         *fd = zh->fd;
         zh->last_recv = now;
@@ -2376,6 +2381,15 @@ int zookeeper_interest(zhandle_t *zh, socket_t *fd, int *interest,
         int idle_send = calculate_interval(&zh->last_send, &now);
         int recv_to = zh->recv_timeout*2/3 - idle_recv;
         int send_to = zh->recv_timeout/3;
+#ifdef ARCUS_SHORT_CONNECT_TIMEOUT
+        /* Use a short connect timeout so we can try connecting to ZooKeeper
+         * servers quickly.
+         */
+        int conn_to = zh->recv_timeout/(3*zh->addrs.count);
+
+        if (zh->state != ZOO_CONNECTED_STATE)
+            recv_to = conn_to - idle_recv;
+#endif
         // have we exceeded the receive timeout threshold?
         if (recv_to <= 0) {
             // We gotta cut our losses and connect to someone else
@@ -2383,6 +2397,13 @@ int zookeeper_interest(zhandle_t *zh, socket_t *fd, int *interest,
             errno = WSAETIMEDOUT;
 #else
             errno = ETIMEDOUT;
+#endif
+#ifdef ARCUS_SHORT_CONNECT_TIMEOUT
+            /* handle_socket_error_msg calls handle_error, which closes
+             * zh->fd and sets it -1.  Set fd=-1 here so the caller
+             * does not poll the now-closed socket.  See do_io.
+             */
+            *fd=-1;
 #endif
             *interest=0;
             *tv = get_timeval(0);
