@@ -189,6 +189,66 @@ void log_message(log_callback_fn callback, ZooLogLevel curLevel,
     }
 }
 
+#ifdef ARCUS_C_CLIENT_LOG
+void zoo_log_message(ZooLogLevel curLevel,int line,const char* funcName,
+    const char* message)
+{
+    static const char* dbgLevelStr[]={"ZOO_INVALID","ZOO_ERROR","ZOO_WARN",
+            "ZOO_INFO","ZOO_DEBUG"};
+    static pid_t pid=0;
+#ifdef THREADED
+    unsigned long int tid = 0;
+#endif
+#ifdef WIN32
+    char timebuf [TIME_NOW_BUF_SIZE];
+    const char* time = time_now(timebuf);
+#else
+    const char* time = time_now(get_time_buffer());
+#endif
+
+    if(pid==0)
+    {
+        pid=getpid();
+    }
+
+    if(enableSyslog && logLevel >= curLevel) {
+        static const char* sysDbgLevelStr[]={"INVALID","ERROR","WARN",
+                                             "INFO","DEBUG"};
+        syslog(map_syslog_priority(curLevel), "zookeeper[%s@%s@%d] %s",
+               sysDbgLevelStr[curLevel], funcName, line, message);
+        return;
+    }
+
+#ifndef THREADED
+    fprintf(zoo_get_log_stream(), "%s:%ld:%s@%s@%d: %s\n", time, (long)pid,
+            dbgLevelStr[curLevel],funcName,line,message);
+#else
+    #ifdef WIN32
+        tid = (unsigned long int)(pthread_self().thread_id);
+    #else
+        tid = (unsigned long int)(pthread_self());
+    #endif
+
+    fprintf(zoo_get_log_stream(), "%s:%ld(0x%lx):%s@%s@%d: %s\n", time, (long)pid, tid,
+            dbgLevelStr[curLevel], funcName, line, message);
+#endif
+    fflush(zoo_get_log_stream());
+}
+
+const char* format_log_message(const char* format,...)
+{
+    va_list va;
+    char* buf=get_format_log_buffer();
+    if(!buf)
+        return "format_log_message: Unable to allocate memory buffer";
+
+    va_start(va,format);
+    vsnprintf(buf, FORMAT_LOG_BUF_SIZE-1,format,va);
+    va_end(va);
+    return buf;
+}
+#endif
+
 void zoo_set_debug_level(ZooLogLevel level)
 {
     if(level==0){
