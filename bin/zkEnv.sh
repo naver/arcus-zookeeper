@@ -94,7 +94,7 @@ done
 
 #make it work in the binary package
 #(use array for LIBPATH to account for spaces within wildcard expansion)
-if ls "${ZOOKEEPER_PREFIX}"/share/zookeeper/zookeeper-*.jar > /dev/null 2>&1; then 
+if ls "${ZOOKEEPER_PREFIX}"/share/zookeeper/zookeeper-*.jar > /dev/null 2>&1; then
   LIBPATH=("${ZOOKEEPER_PREFIX}"/share/zookeeper/*.jar)
 else
   #release tarball format
@@ -138,6 +138,9 @@ then
 fi
 
 #echo "CLASSPATH=$CLASSPATH"
+
+# skipACL for use dynamic reconfiguration
+#export SERVER_JVMFLAGS="$SERVER_JVMFLAGS -Dzookeeper.skipACL=yes"
 
 # default heap for zookeeper server
 ZK_SERVER_HEAP="${ZK_SERVER_HEAP:-1000}"

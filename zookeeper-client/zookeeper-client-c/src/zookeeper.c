@@ -2361,7 +2361,12 @@ int zookeeper_interest(zhandle_t *zh, socket_t *fd, int *interest,
                          "Initiated connection to server [%s]",
                          format_endpoint_info(&zh->addr_cur));
             }
+#ifdef ARCUS_SHORT_CONNECT_TIMEOUT
+            /* Use a short connect timeout/delay to try multiple servers quickly. */
+            *tv = get_timeval(1000);
+#else
             *tv = get_timeval(zh->recv_timeout/3);
+#endif
         }
         *fd = zh->fd;
         zh->last_recv = now;
@@ -2376,6 +2381,15 @@ int zookeeper_interest(zhandle_t *zh, socket_t *fd, int *interest,
         int idle_send = calculate_interval(&zh->last_send, &now);
         int recv_to = zh->recv_timeout*2/3 - idle_recv;
         int send_to = zh->recv_timeout/3;
+#ifdef ARCUS_SHORT_CONNECT_TIMEOUT
+        /* Use a short connect timeout so we can try connecting to ZooKeeper
+         * servers quickly.
+         */
+        int conn_to = zh->recv_timeout/(3*zh->addrs.count);
+
+        if (zh->state != ZOO_CONNECTED_STATE)
+            recv_to = conn_to - idle_recv;
+#endif
         // have we exceeded the receive timeout threshold?
         if (recv_to <= 0) {
             // We gotta cut our losses and connect to someone else
@@ -2383,6 +2397,13 @@ int zookeeper_interest(zhandle_t *zh, socket_t *fd, int *interest,
             errno = WSAETIMEDOUT;
 #else
             errno = ETIMEDOUT;
+#endif
+#ifdef ARCUS_SHORT_CONNECT_TIMEOUT
+            /* handle_socket_error_msg calls handle_error, which closes
+             * zh->fd and sets it -1.  Set fd=-1 here so the caller
+             * does not poll the now-closed socket.  See do_io.
+             */
+            *fd=-1;
 #endif
             *interest=0;
             *tv = get_timeval(0);
@@ -5153,3 +5174,100 @@ int zoo_aremove_all_watches(zhandle_t *zh, const char *path,
     return aremove_watches(
         zh, path, wtype, NULL, NULL, local, completion, data, 1);
 }
+#ifdef ARCUS_ZK_API
+ int zookeeper_get_ensemble_string(zhandle_t *zh, char *dst, int size)
+ {
+     int i, port, rc = ZOK;
+     void *inaddr;
+     struct sockaddr_storage *ep;
+     char *d;
+
+     if (dst == NULL || size <= 0)
+         return ZBADARGUMENTS;
+     d = dst;
+     *d = '\0';
+
+     // NOTE: guard access to {hostname, addr_cur, addrs, addrs_old, addrs_new}
+     lock_reconfig(zh);
+     for (i = 0; i < zh->addrs.count; i++) {
+         int rem, min;
+
+         ep = &zh->addrs.data[i];
+         /* See format_endpoint_info */
+ #if defined(AF_INET6)
+         if(ep->ss_family==AF_INET6){
+             inaddr=&((struct sockaddr_in6*)ep)->sin6_addr;
+             port=((struct sockaddr_in6*)ep)->sin6_port;
+             min = INET6_ADDRSTRLEN;
+         } else {
+ #endif
+             inaddr=&((struct sockaddr_in*)ep)->sin_addr;
+             port=((struct sockaddr_in*)ep)->sin_port;
+             min = INET_ADDRSTRLEN;
+ #if defined(AF_INET6)
+         }
+ #endif
+         d = dst + strlen(dst);
+         rem = size - strlen(dst) - 16;
+         /* Reserve 16 bytes , enough for port and null */
+         if (rem < min || NULL == inet_ntop(ep->ss_family, inaddr, d, rem)) {
+             /* Correct? */
+             errno = ENOMEM;
+             rc = ZSYSTEMERROR;
+             break;
+         }
+         else {
+             /* Inefficient, but it is okay.  We expect only a few addresses. */
+             d = dst + strlen(dst);
+             sprintf(d, ":%d ", ntohs(port));
+         }
+     }
+     unlock_reconfig(zh);
+     return rc;
+ }
+
+ int zookeeper_change_ensemble(zhandle_t *zh, const char *hostname)
+ {
+ #if defined(__CYGWIN__)
+ #error "Not implemented"
+ #endif
+
+     /* Change ensemble using the zoo_set_servers() API.
+      * Save hostname to prepare for API failure.
+      */
+     int rc = ZOK;
+     char *old_hostname = NULL;
+     ZOO_LOG_INFO(("Setting new ensemble server addresses. hostname=%s",
+             hostname == NULL ? "null" : hostname));
+     if (hostname == NULL)
+         return ZBADARGUMENTS;
+
+     // NOTE: guard access to {zk->hostname}
+     lock_reconfig(zh);
+     if (zh->hostname != NULL) {
+         old_hostname = strdup(zh->hostname);
+         if (old_hostname == NULL) {
+             ZOO_LOG_ERROR(("out of memory"));
+             errno=ENOMEM;
+             rc=ZSYSTEMERROR;
+         }
+     }
+     unlock_reconfig(zh);
+
+     if (rc == ZOK) {
+         rc = zoo_set_servers(zh, hostname);
+         if (rc != ZOK) {
+             char *temp;
+             lock_reconfig(zh);
+             temp = zh->hostname;
+             zh->hostname = old_hostname;
+             old_hostname = temp;
+             unlock_reconfig(zh);
+         }
+         if (old_hostname != NULL) {
+             free(old_hostname);
+         }
+     }
+     return rc;
+ }
+#endif

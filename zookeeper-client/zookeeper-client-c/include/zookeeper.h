@@ -40,6 +40,10 @@
 #include "recordio.h"
 #include "zookeeper.jute.h"
 
+#define ARCUS_SHORT_CONNECT_TIMEOUT
+#define ARCUS_ZK_SYSLOG
+#define ARCUS_ZK_API
+
 /**
  * \file zookeeper.h
  * \brief ZooKeeper functions and definitions.
@@ -1586,6 +1590,16 @@ ZOOAPI log_callback_fn zoo_get_log_callback(const zhandle_t *zh);
  */
 ZOOAPI void zoo_set_log_callback(zhandle_t *zh, log_callback_fn callback);
 
+#ifdef ARCUS_ZK_SYSLOG
+/**
+ * \brief sets the stream to be forwarded to syslogd for logging
+ *
+ * If passed a non-zero value for enable, will make the log to be forwarded to
+ * syslogd.
+ */
+ZOOAPI void zoo_forward_logs_to_syslog(const char *name, int enable);
+#endif
+
 /**
  * \brief enable/disable quorum endpoint order randomization
  *
@@ -2285,6 +2299,37 @@ ZOOAPI int zoo_multi(zhandle_t *zh, int count, const zoo_op_t *ops, zoo_op_resul
  */
 ZOOAPI int zoo_remove_watches(zhandle_t *zh, const char *path,
         ZooWatcherType wtype, watcher_fn watcher, void *watcherCtx, int local);
+
+#ifdef ARCUS_ZK_API
+/**
+ * \brief change the ensemble address on the fly.
+ *
+ * Use this function to change the ensemble list after the initialization and while
+ * the ZooKeeper client is running.
+ * \param host comma separated host:port pairs, each corresponding to a zk
+ *   server. e.g. "127.0.0.1:3000,127.0.0.1:3001,127.0.0.1:3002"
+ * \return the return code for the function call.
+ * ZOK operation completed successfully
+ * ZBADARGUMENTS invalid input parameters
+ * ZSYSTEMERROR a system error occured
+ */
+ZOOAPI int zookeeper_change_ensemble(zhandle_t *zh, const char *host);
+
+/**
+ * \brief get the ensemble address in string format.
+ *
+ * Upon success, dst contains a null-terminated string, showing
+ * the IP addresses of the server in the ensemble.
+ *
+ * \param dst the caller provided buffer.
+ * \param size the size of dst in bytes.
+ * \return the return code for the function call.
+ * ZOK operation completed successfully
+ * ZBADARGUMENTS invalid input parameters
+ * ZSYSTEMERROR a system error occured
+ */
+ZOOAPI int zookeeper_get_ensemble_string(zhandle_t *zh, char *dst, int size);
+#endif
 #endif
 #ifdef __cplusplus
 }
