@@ -736,7 +736,7 @@ int main(int argc, char **argv) {
                 ZOO_MAJOR_VERSION,
                 ZOO_MINOR_VERSION,
                 ZOO_PATCH_VERSION,
-                ZOO_INHOUSE_PATCH_VERSION);
+                ZOO_INHOUSE_VERSION);
 #else
         fprintf(stderr,
                 "Version: ZooKeeper cli (c client) version %d.%d.%d\n", 
