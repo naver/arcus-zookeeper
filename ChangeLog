@@ -1,0 +1,6 @@
+2021-03-31 [version 3.5.9-p1]
+	* C library: prefix LOG macros to avoid name conflicts
+	* C library: use a short connect timeout
+	* C library: add zoo_forward_logs_to_syslog
+	* C library: add functions to set, get ensemble list after init
+	* Changing settings for support dynamic configuration
