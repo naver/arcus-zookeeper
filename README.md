@@ -7,6 +7,10 @@ https://github.com/naver/arcus
 
 ## Build C library on Linux
 
+dependency requirements:
+
+    automake 1.12 or higher version // for using serial-tests option (https://issues.apache.org/jira/browse/ZOOKEEPER-1893)
+
 In the top directory, run the following to generate necessary headers and
 scripts.  Then wrap the whole C library directory in a tarball and distribute
 that file.
