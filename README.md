@@ -10,6 +10,8 @@ https://github.com/naver/arcus
 dependency requirements:
 
     automake 1.12 or higher version // for using serial-tests option (https://issues.apache.org/jira/browse/ZOOKEEPER-1893)
+    autoconf 2.59 or higher version
+    cppunit 1.11 or higher version
 
 In the top directory, run the following to generate necessary headers and
 scripts.  Then wrap the whole C library directory in a tarball and distribute
@@ -33,6 +35,10 @@ In the top directory, run the following to build.
     mvn clean install
 
 If you are going to compile with Java 1.8, you should use a recent release at u211 or above.
+
+## Build Troubleshooting
+
+[build-faq](https://github.com/naver/arcus/blob/master/docs/build-faq.md) may help you fix the build problems.
 
 ## Arcus Contributors
 
