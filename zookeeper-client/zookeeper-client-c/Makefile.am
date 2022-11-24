@@ -16,7 +16,7 @@ if ENABLEGCOV
   AM_LDFLAGS = -lgcov
 endif
 
-LIB_LDFLAGS = -no-undefined -version-info 2 $(SOLARIS_LIB_LDFLAGS)
+LIB_LDFLAGS = -no-undefined -release $(PACKAGE_VERSION) -version-info 2 $(SOLARIS_LIB_LDFLAGS)
 
 pkginclude_HEADERS = include/zookeeper.h include/zookeeper_version.h include/zookeeper_log.h include/proto.h include/recordio.h generated/zookeeper.jute.h
 EXTRA_DIST=LICENSE
