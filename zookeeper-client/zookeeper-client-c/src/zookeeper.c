@@ -4351,6 +4351,14 @@ done:
     free_duplicate_path(server_path, path);
     return rc;
 }
+
+#ifdef ARCUS_ZK_API
+char *zoo_get_version(void)
+{
+    return PACKAGE_VERSION;
+}
+#endif
+
 void zoo_create_op_init(zoo_op_t *op, const char *path, const char *value,
         int valuelen,  const struct ACL_vector *acl, int mode,
         char *path_buffer, int path_buffer_len)

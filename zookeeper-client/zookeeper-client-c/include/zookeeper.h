@@ -344,6 +344,15 @@ typedef struct zoo_op {
     };
 } zoo_op_t;
 
+#ifdef ARCUS_ZK_API
+/**
+   Get the Zookeeper C client version.
+
+   @return a string containing the version number of Zookeeper C client
+ */
+char *zoo_get_version(void);
+#endif
+
 /**
  * \brief zoo_create_op_init.
  *
