@@ -1,3 +1,8 @@
+2022-11-24 [version 3.5.9-p2]
+	* C library: Add zoo_get_version() function.
+	* C library: Add release flag to show the version in library file.
+	* C library: Describe build dependencies in README.md
+
 2021-03-31 [version 3.5.9-p1]
 	* C library: prefix LOG macros to avoid name conflicts
 	* C library: use a short connect timeout
