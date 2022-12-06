@@ -32,7 +32,7 @@
   </configurations>
 
   <dependencies>
-    <dependency org="com.google.guava" name="guava" rev="18.0" />
+    <dependency org="com.google.guava" name="guava" rev="31.1-jre" />
 
     <dependency org="org.slf4j" name="slf4j-api" rev="1.7.5"/>
     <dependency org="org.slf4j" name="slf4j-log4j12" rev="1.7.5" transitive="false"/>
