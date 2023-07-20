@@ -27,6 +27,8 @@ extern "C" {
 #define ZOO_PATCH_VERSION 9
 #define ZOO_INHOUSE_VERSION 2
 
+#define ZOO_VERSION "3.5.9-p2"
+
 #ifdef __cplusplus
 }
 #endif
