@@ -4353,10 +4353,13 @@ done:
 }
 
 #ifdef ARCUS_ZK_API
-char *zoo_get_version(void)
-{
-    return PACKAGE_VERSION;
-}
+/**
+  * Return string of "<MAJOR>.<MINOR>.<PATCH>-p<INHOUSE>"
+  */
+ const char *zoo_version_str()
+ {
+     return ZOO_VERSION;
+ }
 #endif
 
 void zoo_create_op_init(zoo_op_t *op, const char *path, const char *value,

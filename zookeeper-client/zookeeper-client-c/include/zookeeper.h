@@ -346,11 +346,15 @@ typedef struct zoo_op {
 
 #ifdef ARCUS_ZK_API
 /**
-   Get the Zookeeper C client version.
-
-   @return a string containing the version number of Zookeeper C client
- */
-char *zoo_get_version(void);
+  * \brief return the zookeeper <MAJOR>.<MINOR>.<PATCH>-p<INHOUSE> version as a string
+  *
+  * This method allows a calling program to determine at runtime if the
+  * version of the dynamically loaded zookeeper library is the same as
+  * the version of the library when the calling program was compiled.
+  *
+  * \return a string "<MAJOR>.<MINOR>.<PATCH>-p<INHOUSE>"
+  */
+ZOOAPI const char* zoo_version_str();
 #endif
 
 /**
