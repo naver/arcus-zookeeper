@@ -36,6 +36,9 @@ In the top directory, run the following to build.
 
 If you are going to compile with Java 1.8, you should use a recent release at u211 or above.
 
+For more detailed installation guide, please refer to the official ZooKeeper documentation:
+https://github.com/apache/zookeeper
+
 ## Build Troubleshooting
 
 [build-faq](https://github.com/naver/arcus/blob/master/docs/build-faq.md) may help you fix the build problems.
@@ -45,5 +48,5 @@ If you are going to compile with Java 1.8, you should use a recent release at u2
 The following people at NAVER have contributed to the Arcus specific
 modifications to the C client library.
 
-Hoonmin Kim (harebox) <harebox@gmail.com>
+Hoonmin Kim (harebox) <harebox@gmail.com>  
 HyongYoub Kim
