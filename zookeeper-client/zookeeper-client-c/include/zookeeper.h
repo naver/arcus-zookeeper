@@ -41,6 +41,7 @@
 #include "zookeeper.jute.h"
 
 #define ARCUS_SHORT_CONNECT_TIMEOUT
+#define ARCUS_ZK_KEEP_RESOLUTION
 #define ARCUS_ZK_SYSLOG
 #define ARCUS_ZK_API
 
