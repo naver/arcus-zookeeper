@@ -980,6 +980,11 @@ int update_addrs(zhandle_t *zh, const struct timeval *ref_time)
     rc = resolve_hosts(zh, hosts, &resolved);
     if (rc != ZOK)
     {
+#ifdef ARCUS_ZK_KEEP_RESOLUTION
+        if (ref_time && zh->addrs.count > 0) {
+            rc = ZOK;
+        }
+#endif
         goto finish;
     }
 
