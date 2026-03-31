@@ -1,3 +1,12 @@
+# 2026-03-31 [version 3.5.9-p4]
+## 🐣 New Features
+  - ZOOKEEPER-1998: Allow C client to throttle host name resolutions.
+## 🐛 Bug Fixes
+  - Keep previous address when resolve_hosts fail.
+## 📝 Documentation
+  - Update zoo_sample.cfg.
+  - Add ZooKeeper link in README.md.
+
 2023-07-21 [version 3.5.9-p3]
 	* C library: Change name of version API on C client
 	* Bump guava in /zookeeper-contrib/zookeeper-contrib-zooinspector
