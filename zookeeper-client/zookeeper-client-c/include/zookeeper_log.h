@@ -24,6 +24,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#define ARCUS_C_CLIENT_LOG
 
 extern ZOOAPI ZooLogLevel logLevel;
 #define LOGCALLBACK(_zh) zoo_get_log_callback(_zh)
@@ -42,6 +43,22 @@ ZOOAPI void log_message(log_callback_fn callback, ZooLogLevel curLevel,
     int line, const char* funcName, const char* format, ...);
 
 FILE* zoo_get_log_stream();
+
+#ifdef ARCUS_C_CLIENT_LOG
+/*
+ * ZOO_LOG_* wrap LOG_* for arcus-c-client compatibility.
+ * Callers pass the format and its arguments in one parenthesized group,
+ * and ZOO_LOG_ARGS_ removes those parentheses:
+ *   ZOO_LOG_INFO(("format %s", arg));
+ *   => LOG_INFO(NULL, ZOO_LOG_ARGS_ ("format %s", arg));
+ *   => LOG_INFO(NULL, "format %s", arg);
+ */
+#define ZOO_LOG_ARGS_(...) __VA_ARGS__
+#define ZOO_LOG_ERROR(x) LOG_ERROR(NULL, ZOO_LOG_ARGS_ x)
+#define ZOO_LOG_WARN(x)  LOG_WARN(NULL, ZOO_LOG_ARGS_ x)
+#define ZOO_LOG_INFO(x)  LOG_INFO(NULL, ZOO_LOG_ARGS_ x)
+#define ZOO_LOG_DEBUG(x) LOG_DEBUG(NULL, ZOO_LOG_ARGS_ x)
+#endif
 
 #ifdef __cplusplus
 }
