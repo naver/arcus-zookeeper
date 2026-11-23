@@ -48,6 +48,8 @@
 #include "recordio.h"
 #include "zookeeper.jute.h"
 
+#define ARCUS_SHORT_CONNECT_TIMEOUT
+
 /**
  * \file zookeeper.h
  * \brief ZooKeeper functions and definitions.
