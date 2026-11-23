@@ -58,7 +58,7 @@ static zhandle_t *zh;
 static clientid_t myid;
 static const char *clientIdFile = 0;
 struct timeval startTime;
-static const char *cmd;
+static char *cmd;
 static const char *cert;
 static int batchMode=0;
 
@@ -330,7 +330,7 @@ int startsWith(const char *line, const char *prefix) {
 static const char *hostPort;
 static int verbose = 0;
 
-void processline(const char *line) {
+void processline(char *line) {
     int rc;
     int async = ((line[0] == 'a') && !(startsWith(line, "addauth ")));
     if (async) {
@@ -722,7 +722,7 @@ void processline(const char *line) {
  * Returns 0 if the argument does not start with the prefix.
  * Returns 1 in case of success.
  */
-int handleBatchMode(const char* arg, const char** buf) {
+int handleBatchMode(char* arg, char** buf) {
     size_t cmdlen = strlen(arg);
     if (cmdlen < 4) {
         // too short

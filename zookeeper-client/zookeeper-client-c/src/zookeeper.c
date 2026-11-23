@@ -1304,7 +1304,7 @@ static zhandle_t *zookeeper_init_internal(const char *host, watcher_fn watcher,
 {
     int errnosave = 0;
     zhandle_t *zh = NULL;
-    char *index_chroot = NULL;
+    const char *index_chroot = NULL;
 
     // Create our handle
     zh = calloc(1, sizeof(*zh));
