@@ -998,6 +998,8 @@
             <exclude>**/configure.ac</exclude>
             <exclude>**/Makefile.am</exclude>
             <exclude>conf/zoo_sample.cfg</exclude>
+            <exclude>conf/zoo_sample_arcus.cfg</exclude>
+            <exclude>conf/zoo_sample_arcus.cfg.dynamic</exclude>
             <exclude>conf/configuration.xsl</exclude>
             <exclude>.travis.yml</exclude>
             <exclude>excludeFindBugsFilter.xml</exclude>
