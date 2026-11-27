@@ -1,58 +1,45 @@
-# Apache ZooKeeper [![GitHub Actions CI][ciBadge]][ciLink] [![Travis CI][trBadge]][trLink] [![Maven Central][mcBadge]][mcLink] [![License][liBadge]][liLink]
+This is a branch off of ZooKeeper release 3.8.8.  We have made some minor
+changes to the C client library (zookeeper-client/zookeeper-client-c).  So,
+we package that and distribute it along with arcus-memcached and
+arcus-c-client.  They rely on the modified library.
 
-<p align="left">
-  <a href="https://zookeeper.apache.org/">
-    <img src="https://zookeeper.apache.org/images/zookeeper_small.gif"" alt="https://zookeeper.apache.org/"><br/>
-  </a>
-</p>
+Github project page:
+https://github.com/naver/arcus
 
-For the latest information about Apache ZooKeeper, please visit our website at:
+## Build C library on Linux
 
-   https://zookeeper.apache.org
+dependency requirements:
 
-and our wiki, at:
+    automake 1.12 or higher version // for using serial-tests option (https://issues.apache.org/jira/browse/ZOOKEEPER-1893)
+    autoconf 2.59 or higher version
+    cppunit 1.11 or higher version
 
-   https://cwiki.apache.org/confluence/display/ZOOKEEPER
+In the top directory, run the following to generate necessary headers and
+scripts.  Then wrap the whole C library directory in a tarball and distribute
+that file.
 
-## Packaging/release artifacts
+    mvn -pl zookeeper-jute generate-sources
+    cd zookeeper-client/zookeeper-client-c
+    autoreconf -if
 
-Either downloaded from https://zookeeper.apache.org/releases.html or
-found in zookeeper-assembly/target directory after building the project with maven.
+Make sure to install maven, cppunit, and cppunit-devel before running the above.
+`autoreconf` generates configure script.
 
-    apache-zookeeper-[version].tar.gz
+    ./configure --prefix=/path/to/arcus-directory
+    make
+    make install
 
-        Contains all the source files which can be built by running:
-        mvn clean install
+## Build Server and Java library on Linux
 
-        To generate an aggregated apidocs for zookeeper-server and zookeeper-jute:
-        mvn javadoc:aggregate
-        (generated files will be at target/site/apidocs)
+In the top directory, run the following to build.
 
-    apache-zookeeper-[version]-bin.tar.gz
+    mvn clean install
 
-        Contains all the jar files required to run ZooKeeper
-        Full documentation can also be found in the docs folder
+If you are going to compile with Java 1.8, you should use a recent release at u211 or above.
 
-As of version 3.5.5, the parent, zookeeper and zookeeper-jute artifacts
-are deployed to the central repository after the release
-is voted on and approved by the Apache ZooKeeper PMC:
+For more detailed installation guide, please refer to the official ZooKeeper documentation:
+https://github.com/apache/zookeeper
 
-  https://repo1.maven.org/maven2/org/apache/zookeeper/zookeeper
+## Build Troubleshooting
 
-## Java 8
-
-If you are going to compile with Java 1.8, you should use a
-recent release at u211 or above.
-
-# Contributing
-We always welcome new contributors to the project! See [How to Contribute](https://cwiki.apache.org/confluence/display/ZOOKEEPER/HowToContribute) for details on how to submit patches as pull requests and other aspects of our contribution workflow.
-
-
-[ciBadge]: https://github.com/apache/zookeeper/workflows/CI/badge.svg
-[ciLink]: https://github.com/apache/zookeeper/actions
-[liBadge]: https://img.shields.io/github/license/apache/zookeeper?color=282661
-[liLink]: https://github.com/apache/zookeeper/blob/master/LICENSE.txt
-[mcBadge]: https://img.shields.io/maven-central/v/org.apache.zookeeper/zookeeper
-[mcLink]: https://zookeeper.apache.org/releases
-[trBadge]: https://travis-ci.org/apache/zookeeper.svg?branch=master
-[trLink]: https://travis-ci.org/apache/zookeeper
+[build-faq](https://github.com/naver/arcus/blob/master/docs/build-faq.md) may help you fix the build problems.
